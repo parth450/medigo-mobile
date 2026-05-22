@@ -47,7 +47,8 @@ export interface Bill {
 }
 
 export interface CreateBillItemDto {
-  mb_id: number; // Must be filled with MedicineBatch.mb_id
+  medicine_id: number;
+  mb_id?: number; 
   quantity: number;
 }
 
@@ -80,4 +81,16 @@ export interface CreateUserDto {
   email: string;
   password_hash: string;
   role: 'pharmacist' | 'store_manager';
+}
+
+export interface PaginationMeta {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
 }

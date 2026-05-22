@@ -1,4 +1,4 @@
-import * as MMKVModule from "react-native-mmkv";
+import { createMMKV } from "react-native-mmkv";
 
 class MemoryStorage {
   private map = new Map<string, string>();
@@ -12,17 +12,7 @@ class MemoryStorage {
 
 let storageInstance: any;
 try {
-  const createMMKV = (MMKVModule as any)?.createMMKV;
-  if (createMMKV) {
-    storageInstance = createMMKV({ id: "medigo-storage" });
-  } else {
-    const MMKVClass = (MMKVModule as any)?.MMKV;
-    if (MMKVClass) {
-      storageInstance = new MMKVClass({ id: "medigo-storage" });
-    } else {
-      storageInstance = new MemoryStorage();
-    }
-  }
+  storageInstance = createMMKV({ id: "medigo-storage" });
 } catch (e) {
   storageInstance = new MemoryStorage();
 }

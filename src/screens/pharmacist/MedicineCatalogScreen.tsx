@@ -1,20 +1,20 @@
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import * as Haptics from "expo-haptics";
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
+  ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   ScrollView,
-  ActivityIndicator,
-  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import * as Haptics from "expo-haptics";
-import { getMedicinesApi, getMedicineBatchesApi } from "../../api/medicines.api";
+import { getMedicineBatchesApi, getMedicinesApi } from "../../api/medicines.api";
 import type { Medicine } from "../../types/api.types";
-import { triggerLogout } from "../../api/axiosClient";
+import { useTheme } from "../../store/theme.store";
 
 const CATEGORIES = ["all", "tablet", "capsule", "syrup", "injection", "cream", "drops"] as const;
 
@@ -22,17 +22,40 @@ export default function MedicineCatalogScreen() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [expandedMedicineId, setExpandedMedicineId] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch medicines catalog using query variables
-  const { data: medicines = [], isLoading } = useQuery({
+  // 1. Extract theme properties
+  const { isDarkMode } = useTheme();
+
+  const {
+    data: infiniteMedicinesData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    refetch,
+  } = useInfiniteQuery({
     queryKey: ["medicines", search, selectedCategory],
-    queryFn: () =>
+    queryFn: ({ pageParam = 1 }) =>
       getMedicinesApi({
         search,
         category: selectedCategory === "all" ? undefined : selectedCategory,
         status: "active",
+        page: pageParam,
+        limit: 10,
       }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.length === 10 ? allPages.length + 1 : undefined;
+    },
   });
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   const handleToggleExpand = (medicineId: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -43,70 +66,66 @@ export default function MedicineCatalogScreen() {
     }
   };
 
+  const medicinesList: Medicine[] = infiniteMedicinesData
+    ? infiniteMedicinesData.pages.flat()
+    : [];
+
+  // 2. Select contextual style map
+  const currentStyles = isDarkMode ? darkStyles : lightStyles;
+
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <View style={[styles.container, currentStyles.container]}>
+      {/* Header Layout */}
       <View style={styles.header}>
         <View>
           <Text style={styles.brandTitle}>Medicine Catalog</Text>
           <Text style={styles.brandSubtitle}>Real-time stock & locator logs</Text>
         </View>
-        <Pressable
-          style={styles.logoutHeaderBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            Alert.alert(
-              "Logout Confirm",
-              "Are you sure you want to sign out?",
-              [
-                { text: "Cancel", style: "cancel" },
-                { text: "Logout", style: "destructive", onPress: () => triggerLogout() }
-              ]
-            );
-          }}
-        >
-          <Text style={styles.logoutHeaderBtnText}>Logout</Text>
-        </Pressable>
       </View>
 
-      {/* Filter Section */}
-      <View style={styles.searchFilterSection}>
+      {/* Filter Options Rack Section */}
+      <View style={[styles.searchFilterSection, currentStyles.filterSection]}>
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, currentStyles.input]}
           placeholder="Filter by chemical name, manufacturer..."
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={isDarkMode ? "#64748B" : "#94A3B8"}
           value={search}
           onChangeText={setSearch}
         />
-        
-        {/* Category Badge Carousel */}
+
+        {/* Horizontal Category Select Carousel */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryContainer}
         >
-          {CATEGORIES.map((cat) => (
-            <Pressable
-              key={cat}
-              style={[
-                styles.categoryBadge,
-                selectedCategory === cat && styles.categoryBadgeActive,
-              ]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setSelectedCategory(cat);
-              }}
-            >
-              <Text
+          {CATEGORIES.map((cat) => {
+            const isActive = selectedCategory === cat;
+            return (
+              <Pressable
+                key={cat}
                 style={[
-                  styles.categoryText,
-                  selectedCategory === cat && styles.categoryTextActive,
+                  styles.categoryBadge,
+                  isDarkMode ? darkStyles.categoryBadge : lightStyles.categoryBadge,
+                  isActive && styles.categoryBadgeActive,
                 ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setSelectedCategory(cat);
+                }}
               >
-                {cat.toUpperCase()}
-              </Text>
-            </Pressable>
-          ))}
+                <Text
+                  style={[
+                    styles.categoryText,
+                    isDarkMode ? darkStyles.textSub : lightStyles.textSub,
+                    isActive && styles.categoryTextActive,
+                  ]}
+                >
+                  {cat.toUpperCase()}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -114,47 +133,69 @@ export default function MedicineCatalogScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0D9488" />
         </View>
-      ) : medicines.length === 0 ? (
+      ) : medicinesList.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyHeading}>No Medicines Found</Text>
-          <Text style={styles.emptySub}>No results match your lookup query.</Text>
+          <Text style={[styles.emptyHeading, currentStyles.textSub]}>No Medicines Found</Text>
+          <Text style={[styles.emptySub, { color: isDarkMode ? "#475569" : "#94A3B8" }]}>No results match your lookup query.</Text>
         </View>
       ) : (
         <FlatList
-          data={medicines}
+          data={medicinesList}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContainer}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={isDarkMode ? "#34D399" : "#0D9488"}
+              colors={["#0D9488"]}
+            />
+          }
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator size="small" color="#0D9488" style={{ marginVertical: 12 }} />
+            ) : null
+          }
           renderItem={({ item }) => (
             <Pressable
-              style={styles.medCard}
+              style={[styles.medCard, currentStyles.card]}
               onPress={() => handleToggleExpand(item.id)}
             >
               <View style={styles.medHeaderRow}>
                 <View style={styles.medInfo}>
-                  <Text style={styles.medName}>{item.name}</Text>
+                  {/* Fixed: Moved fallback check inside the text rendering space */}
+                  <Text style={[styles.medName, currentStyles.textMain]}>
+                    {item.name ?? "Unnamed Medicine"}
+                  </Text>
                   {item.generic_name && (
-                    <Text style={styles.genericName}>{item.generic_name}</Text>
+                    <Text style={[styles.genericName, { color: isDarkMode ? "#94A3B8" : "#64748B" }]}>{item.generic_name}</Text>
                   )}
                   <View style={styles.metaBadgeGrid}>
-                    <View style={styles.metaBadge}>
-                      <Text style={styles.metaBadgeText}>{item.category}</Text>
+                    <View style={[styles.metaBadge, { backgroundColor: isDarkMode ? "#334155" : "#F1F5F9" }]}>
+                      <Text style={[styles.metaBadgeText, currentStyles.textSub]}>{item.category}</Text>
                     </View>
-                    <View style={[styles.metaBadge, styles.locationBadge]}>
-                      <Text style={styles.locationBadgeText}>Rack: {item.rack_location}</Text>
+                    <View style={[styles.metaBadge, styles.locationBadge, { backgroundColor: isDarkMode ? "#064E3B" : "#F0FDFA" }]}>
+                      <Text style={[styles.locationBadgeText, { color: isDarkMode ? "#34D399" : "#0D9488" }]}>Rack: {item.rack_location}</Text>
                     </View>
                   </View>
                 </View>
                 <View style={styles.priceAction}>
                   <Text style={styles.medCode}>#{item.medicine_code}</Text>
-                  <Text style={styles.expandLabel}>
+                  <Text style={[styles.expandLabel, { color: isDarkMode ? "#34D399" : "#0D9488" }]}>
                     {expandedMedicineId === item.id ? "Hide Batches ▲" : "View Batches ▼"}
                   </Text>
                 </View>
               </View>
 
-              {/* Batches Expanded Section */}
+              {/* Lazy Loaded Batches Content Block */}
               {expandedMedicineId === item.id && (
-                <MedicineBatchesSection medicineId={item.id} />
+                <MedicineBatchesSection medicineId={item.id} isDarkMode={isDarkMode} currentStyles={currentStyles} />
               )}
             </Pressable>
           )}
@@ -164,8 +205,13 @@ export default function MedicineCatalogScreen() {
   );
 }
 
-// Subcomponent to fetch and render batches dynamically under each medicine card
-function MedicineBatchesSection({ medicineId }: { medicineId: number }) {
+interface BatchSectionProps {
+  medicineId: number;
+  isDarkMode: boolean;
+  currentStyles: any;
+}
+
+function MedicineBatchesSection({ medicineId, isDarkMode, currentStyles }: BatchSectionProps) {
   const { data: batches = [], isLoading } = useQuery({
     queryKey: ["batches", medicineId],
     queryFn: () => getMedicineBatchesApi(medicineId),
@@ -189,41 +235,41 @@ function MedicineBatchesSection({ medicineId }: { medicineId: number }) {
   if (batches.length === 0) {
     return (
       <View style={styles.batchEmpty}>
-        <Text style={styles.batchEmptyText}>No active batches found in inventory.</Text>
+        <Text style={[styles.batchEmptyText, { color: isDarkMode ? "#64748B" : "#94A3B8" }]}>No active batches found in inventory.</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.batchSection}>
-      <Text style={styles.batchSectionTitle}>Inventory Batch Breakdown</Text>
+    <View style={[styles.batchSection, { borderTopColor: isDarkMode ? "#334155" : "#F1F5F9" }]}>
+      <Text style={[styles.batchSectionTitle, currentStyles.textSub]}>Inventory Batch Breakdown</Text>
       {batches.map((batch) => {
         const daysToExpiry = getExpiryDays(batch.expiry_date);
-        let expiryColor = "#10B981"; // Safe green
+        let expiryColor = isDarkMode ? "#34D399" : "#10B981";
         let expiryLabel = `Exp: ${new Date(batch.expiry_date).toLocaleDateString()}`;
 
         if (daysToExpiry <= 0) {
-          expiryColor = "#EF4444"; // Expired red
+          expiryColor = "#EF4444";
           expiryLabel = "Expired";
         } else if (daysToExpiry <= 90) {
-          expiryColor = "#F59E0B"; // Expiring soon amber
+          expiryColor = "#F59E0B";
           expiryLabel = `Expiring soon (${daysToExpiry} days)`;
         }
 
         return (
-          <View key={batch.mb_id} style={styles.batchRow}>
+          <View key={batch.mb_id} style={[styles.batchRow, currentStyles.batchRow]}>
             <View style={styles.batchRowInfo}>
-              <Text style={styles.batchNumberText}>Batch {batch.batch_number}</Text>
+              <Text style={[styles.batchNumberText, currentStyles.textMain]}>Batch {batch.batch_number}</Text>
               <Text style={[styles.batchExpiryText, { color: expiryColor }]}>
                 {expiryLabel}
               </Text>
             </View>
             <View style={styles.batchRowPriceStock}>
-              <Text style={styles.batchMrpText}>₹{Number(batch.mrp).toFixed(2)}</Text>
+              <Text style={[styles.batchMrpText, currentStyles.textMain]}>₹{Number(batch.mrp).toFixed(2)}</Text>
               <Text
                 style={[
                   styles.batchQtyText,
-                  batch.quantity <= 10 ? styles.qtyLowText : styles.qtyOkText,
+                  batch.quantity <= 10 ? styles.qtyLowText : (isDarkMode ? { color: "#34D399" } : styles.qtyOkText),
                 ]}
               >
                 Stock: {batch.quantity} units
@@ -236,243 +282,71 @@ function MedicineBatchesSection({ medicineId }: { medicineId: number }) {
   );
 }
 
+// 3. Structured Light & Dark Styling Maps
+const lightStyles = StyleSheet.create({
+  container: { backgroundColor: "#F8FAFC" },
+  filterSection: { backgroundColor: "#fff", borderBottomColor: "#F1F5F9" },
+  input: { backgroundColor: "#F8FAFC", borderColor: "#E2E8F0", color: "#1E293B" },
+  categoryBadge: { backgroundColor: "#F1F5F9", borderColor: "#E2E8F0" },
+  card: { backgroundColor: "#fff", borderColor: "#F1F5F9" },
+  batchRow: { backgroundColor: "#F8FAFC", borderColor: "#E2E8F0" },
+  textMain: { color: "#0F172A" },
+  textSub: { color: "#475569" },
+});
+
+const darkStyles = StyleSheet.create({
+  container: { backgroundColor: "#0F172A" },
+  filterSection: { backgroundColor: "#1E293B", borderBottomColor: "#334155" },
+  input: { backgroundColor: "#0F172A", borderColor: "#334155", color: "#F8FAFC" },
+  categoryBadge: { backgroundColor: "#334155", borderColor: "#475569" },
+  card: { backgroundColor: "#1E293B", borderColor: "#334155" },
+  batchRow: { backgroundColor: "#0F172A", borderColor: "#334155" },
+  textMain: { color: "#F8FAFC" },
+  textSub: { color: "#94A3B8" },
+});
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-  },
-  header: {
-    backgroundColor: "#0D9488",
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  logoutHeaderBtn: {
-    backgroundColor: "#FEE2E2",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  logoutHeaderBtnText: {
-    color: "#EF4444",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  brandTitle: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  brandSubtitle: {
-    color: "#CCFBF1",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  searchFilterSection: {
-    padding: 16,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
-  searchInput: {
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: "#1E293B",
-    marginBottom: 12,
-  },
-  categoryContainer: {
-    paddingVertical: 4,
-  },
-  categoryBadge: {
-    backgroundColor: "#F1F5F9",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  categoryBadgeActive: {
-    backgroundColor: "#0D9488",
-    borderColor: "#0D9488",
-  },
-  categoryText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#475569",
-  },
-  categoryTextActive: {
-    color: "#fff",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 40,
-  },
-  emptyHeading: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#475569",
-    marginBottom: 4,
-  },
-  emptySub: {
-    fontSize: 13,
-    color: "#94A3B8",
-  },
-  listContainer: {
-    padding: 16,
-  },
-  medCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
-    shadowColor: "#475569",
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  medHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  medInfo: {
-    flex: 1,
-  },
-  medName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  genericName: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 2,
-    fontStyle: "italic",
-  },
-  metaBadgeGrid: {
-    flexDirection: "row",
-    marginTop: 8,
-  },
-  metaBadge: {
-    backgroundColor: "#F1F5F9",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  metaBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#475569",
-    textTransform: "uppercase",
-  },
-  locationBadge: {
-    backgroundColor: "#F0FDFA",
-  },
-  locationBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#0D9488",
-  },
-  priceAction: {
-    alignItems: "flex-end",
-  },
-  medCode: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#94A3B8",
-  },
-  expandLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0D9488",
-    marginTop: 16,
-  },
-  batchLoading: {
-    padding: 16,
-    alignItems: "center",
-  },
-  batchEmpty: {
-    padding: 16,
-    alignItems: "center",
-  },
-  batchEmptyText: {
-    fontSize: 12,
-    color: "#94A3B8",
-  },
-  batchSection: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-  },
-  batchSectionTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#475569",
-    textTransform: "uppercase",
-    marginBottom: 10,
-  },
-  batchRow: {
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  batchRowInfo: {
-    flex: 1.5,
-  },
-  batchNumberText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1E293B",
-  },
-  batchExpiryText: {
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  batchRowPriceStock: {
-    alignItems: "flex-end",
-  },
-  batchMrpText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  batchQtyText: {
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  qtyOkText: {
-    color: "#10B981",
-  },
-  qtyLowText: {
-    color: "#EF4444",
-  },
+  container: { flex: 1 },
+  header: { backgroundColor: "#0D9488", paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+  brandTitle: { color: "#fff", fontSize: 22, fontWeight: "800" },
+  brandSubtitle: { color: "#CCFBF1", fontSize: 12, fontWeight: "500" },
+  searchFilterSection: { padding: 16, borderBottomWidth: 1 },
+  searchInput: { borderWidth: 1, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, fontSize: 15, marginBottom: 12 },
+  categoryContainer: { paddingVertical: 4 },
+  categoryBadge: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 10, marginRight: 8, borderWidth: 1 },
+  categoryBadgeActive: { backgroundColor: "#0D9488", borderColor: "#0D9488" },
+  categoryText: { fontSize: 11, fontWeight: "700" },
+  categoryTextActive: { color: "#fff" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  emptyContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
+  emptyHeading: { fontSize: 16, fontWeight: "700", marginBottom: 4 },
+  emptySub: { fontSize: 13 },
+  listContainer: { padding: 16 },
+  medCard: { borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, shadowColor: "#475569", shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 },
+  medHeaderRow: { flexDirection: "row", justifyContent: "space-between" },
+  medInfo: { flex: 1 },
+  medName: { fontSize: 16, fontWeight: "700" },
+  genericName: { fontSize: 12, marginTop: 2, fontStyle: "italic" },
+  metaBadgeGrid: { flexDirection: "row", marginTop: 8 },
+  metaBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, marginRight: 6 },
+  metaBadgeText: { fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
+  locationBadge: {},
+  locationBadgeText: { fontSize: 10, fontWeight: "700" },
+  priceAction: { alignItems: "flex-end" },
+  medCode: { fontSize: 12, fontWeight: "700", color: "#94A3B8" },
+  expandLabel: { fontSize: 11, fontWeight: "700", marginTop: 16 },
+  batchLoading: { padding: 16, alignItems: "center" },
+  batchEmpty: { padding: 16, alignItems: "center" },
+  batchEmptyText: { fontSize: 12 },
+  batchSection: { marginTop: 16, paddingTop: 16, borderTopWidth: 1 },
+  batchSectionTitle: { fontSize: 12, fontWeight: "800", textTransform: "uppercase", marginBottom: 10 },
+  batchRow: { borderRadius: 10, padding: 10, marginBottom: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  batchRowInfo: { flex: 1.5 },
+  batchNumberText: { fontSize: 13, fontWeight: "700" },
+  batchExpiryText: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+  batchRowPriceStock: { alignItems: "flex-end" },
+  batchMrpText: { fontSize: 14, fontWeight: "700" },
+  batchQtyText: { fontSize: 11, fontWeight: "600", marginTop: 2 },
+  qtyOkText: { color: "#10B981" },
+  qtyLowText: { color: "#EF4444" },
 });

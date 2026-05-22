@@ -1,53 +1,57 @@
 import axios from "axios";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import { AuthStorage } from "../store/auth.store";
 
-let onUnauthorizedCallback: (() => void) | null = null;
 
-export const setOnUnauthorized = (callback: () => void) => {
-  onUnauthorizedCallback = callback;
-};
-
-export const triggerLogout = () => {
-  AuthStorage.clear();
-  if (onUnauthorizedCallback) {
-    onUnauthorizedCallback();
+const DEV_HOST = (() => {
+  
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const host = hostUri.split(":")[0];
+    
+    if (host && host !== "localhost" && host !== "127.0.0.1") {
+      return host;
+    }
   }
-};
 
-// Handles local loops securely across platform testing layers
-const BASE_URL = Platform.OS === "android"
-  ? "http://10.0.2.2:3000/api"
-  : "http://localhost:3000/api";
+ 
+  const manifestHost = (Constants.manifest as any)?.debuggerHost?.split(":")[0] || 
+                       (Constants.manifest2 as any)?.extra?.expoGo?.debuggerHost?.split(":")[0];
+  if (manifestHost) {
+    return manifestHost;
+  }
 
+  
+  return Platform.OS === "android" ? "10.0.2.2" : "localhost";
+})();
+
+
+console.log(`[MediGo Network] Target API base established at: http://${DEV_HOST}:3000/api`);
+
+const BASE_URL = `http://${DEV_HOST}:3000/api`;
 
 const axiosClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000, // 10s timeout prevents infinite app hangs
+  timeout: 10000,
   headers: {
     "Content-Type": "application/json",
-  }
+  },
 });
 
-// Dynamic Outbound Request Interceptor Engine
+
 axiosClient.interceptors.request.use(
   (config) => {
     const token = AuthStorage.getToken();
-    
     if (token && config.headers) {
-      // Clean, standardized method to attach auth headers in Axios
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
     return config;
   },
-  (error) => {
-    // CRITICAL FIX: Rejects the request error cleanly so the promise chain fails explicitly
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Inbound Response Interceptor Engine (Auto-Logout on 401 Unauthorized)
+
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -60,5 +64,18 @@ axiosClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+
+let onUnauthorizedCallback: (() => void) | null = null;
+export const setOnUnauthorized = (callback: () => void) => {
+  onUnauthorizedCallback = callback;
+};
+
+export const triggerLogout = () => {
+  AuthStorage.clear();
+  if (onUnauthorizedCallback) {
+    onUnauthorizedCallback();
+  }
+};
 
 export default axiosClient;

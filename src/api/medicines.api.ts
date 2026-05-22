@@ -4,12 +4,15 @@ import type {
   MedicineBatch,
   CreateMedicineDto,
   CreateBatchDto,
+  PaginatedResponse, // We will map this structure to hold meta flags safely
 } from "../types/api.types";
 
 export const getMedicinesApi = async (params?: {
   search?: string;
   category?: string;
   status?: string;
+  page?: number;   //  Added page number tracking parameters
+  limit?: number;  //  Added limit chunk sizing rules
 }): Promise<Medicine[]> => {
   const response = await axiosClient.get<Medicine[]>("/medicines", { params });
   return response.data;

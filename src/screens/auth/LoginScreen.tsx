@@ -24,6 +24,7 @@ interface Props {
 export default function LoginScreen({ setUser }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [secureText, setSecureText] = useState(true); // Tracks password hidden status
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
@@ -82,14 +83,12 @@ export default function LoginScreen({ setUser }: Props) {
   };
 
   return (
-    // 🌟 FIX 1: Set correct runtime behaviors dynamically across both Android & iOS
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 24}
     >
       <ScrollView
-        // 🌟 FIX 2: Added nested inner style tracking to keep the forms aligned perfectly
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -119,16 +118,30 @@ export default function LoginScreen({ setUser }: Props) {
           />
 
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            placeholder="Enter your password"
-            placeholderTextColor="#9CA3AF"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.input}
-          />
+          {/* Container holding the text input and the eye toggle absolute icon */}
+          <View style={styles.passwordContainer}>
+            <TextInput
+              placeholder="Enter your password"
+              placeholderTextColor="#9CA3AF"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={secureText}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.passwordInput}
+            />
+            <Pressable 
+              style={styles.eyeIcon} 
+              onPress={() => setSecureText(!secureText)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons 
+                name={secureText ? "eye-off-outline" : "eye-outline"} 
+                size={22} 
+                color="#6B7280" 
+              />
+            </Pressable>
+          </View>
 
           <Pressable
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -152,7 +165,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FAFC",
   },
-  // 🌟 FIX 3: Force parent ScrollView container layout window to track explicitly 
   scrollView: {
     flex: 1,
   },
@@ -217,6 +229,29 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     fontSize: 15,
     color: "#0F172A",
+  },
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 14,
+    marginBottom: 18,
+    position: "relative",
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 16,
+    paddingRight: 48, // Padding space to stop text from overriding eye icon layer
+    fontSize: 15,
+    color: "#0F172A",
+  },
+  eyeIcon: {
+    position: "absolute",
+    right: 16,
+    height: "100%",
+    justifyContent: "center",
   },
   button: {
     backgroundColor: "#0D9488",

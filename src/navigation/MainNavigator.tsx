@@ -1,7 +1,9 @@
+
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import PharmacistTabs from "./PharmacistTabs";
 import ManagerTabs from "./ManagerTabs";
+import ActiveBillScreen from "../screens/pharmacist/ActiveBillScreen"; 
 import type { User } from "../types/auth.types";
 
 const Stack = createNativeStackNavigator();
@@ -19,7 +21,24 @@ export default function MainNavigator({ user }: Props) {
       }}
     >
       {user.role === "pharmacist" && (
-        <Stack.Screen name="Pharmacist" component={PharmacistTabs} />
+        <>
+  
+          <Stack.Screen name="Pharmacist" component={PharmacistTabs} />
+          
+         
+          <Stack.Screen 
+            name="ActiveBill" 
+            component={ActiveBillScreen} 
+            options={{
+              headerShown: true,
+              headerTitle: "Active Invoice",
+              headerTintColor: "#0D9488", 
+              headerBackTitle: "Desk",
+              
+              animation: "slide_from_right" 
+            }}
+          />
+        </>
       )}
 
       {user.role === "store_manager" && (

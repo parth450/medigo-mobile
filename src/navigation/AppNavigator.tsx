@@ -1,36 +1,22 @@
-import React, {
-  useEffect,
-  useState,
-} from "react";
+import React, {useEffect,useState, } from "react";
 
-import {
-  NavigationContainer,
-} from "@react-navigation/native";
+import { NavigationContainer,} from "@react-navigation/native";
 
-import {
-  View,
-  ActivityIndicator,
-} from "react-native";
+import { View, ActivityIndicator, } from "react-native";
 
 import AuthStack from "./AuthStack";
 
-import MainNavigator
-  from "./MainNavigator";
+import MainNavigator   from "./MainNavigator";
 
-import { AuthStorage }
-  from "../store/auth.store";
+import { AuthStorage } from "../store/auth.store";
 
-import { setOnUnauthorized }
-  from "../api/axiosClient";
+import { setOnUnauthorized } from "../api/axiosClient";
 
-import type {
-  User,
-} from "../types/auth.types";
+import type { User, } from "../types/auth.types";
 
 export default function AppNavigator() {
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
   const [user, setUser] =
     useState<User | null>(null);

@@ -1,150 +1,122 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import * as MMKVModule from "react-native-mmkv";
-import type { Medicine, MedicineBatch } from "../types/api.types";
+import { create } from 'zustand';
+import type { Medicine, MedicineBatch } from '../types/api.types';
 
-class MemoryStorage {
-  private map = new Map<string, string>();
-  getString(key: string): string | undefined { return this.map.get(key); }
-  set(key: string, value: string): void { this.map.set(key, value); }
-}
-
-let storageInstance: any;
-try {
-  const MMKVClass = (MMKVModule as any)?.MMKV;
-  if (MMKVClass) {
-    storageInstance = new MMKVClass({ id: "medigo-cart-storage" });
-  } else {
-    storageInstance = new MemoryStorage();
-  }
-} catch (e) {
-  storageInstance = new MemoryStorage();
-}
-
-const storage = storageInstance;
-
-export interface CartItem {
+interface CartItem {
   medicine: Medicine;
   batch: MedicineBatch;
   quantity: number;
-  itemSubtotal: number; // Raw base cost excluding tax
-  itemGst: number;      // Calculated individual GST component
-  itemTotal: number;    // Absolute final price matching total MRP units
+  itemGst: number;
 }
 
-interface CartContextType {
+interface CartState {
+  // --- Operational States ---
   items: CartItem[];
-  addToCart: (medicine: Medicine, batch: MedicineBatch, quantity?: number) => void;
-  removeFromCart: (batchId: number) => void;
-  updateQuantity: (batchId: number, quantity: number) => void;
-  clearCart: () => void;
+  searchQuery: string;
+  selectedMedicine: Medicine | null;
+  
+  // --- UI Layout Toggle States ---
+  paymentMethod: "cash" | "card" | "upi";
+  isCartVisible: boolean;
+  isCheckoutSuccess: boolean;
+  successBillData: any | null;
+  searchHistory: string[];
+
+  // --- Core Calculations ---
   subtotal: number;
   totalGst: number;
   grandTotal: number;
+
+  // --- Actions ---
+  setSearchQuery: (query: string) => void;
+  setSelectedMedicine: (medicine: Medicine | null) => void;
+  setPaymentMethod: (method: "cash" | "card" | "upi") => void;
+  setIsCartVisible: (visible: boolean) => void;
+  setIsCheckoutSuccess: (success: boolean) => void;
+  setSuccessBillData: (data: any) => void;
+  appendToSearchHistory: (term: string) => void;
+  
+  addToCart: (medicine: Medicine, batch: MedicineBatch, qty: number) => void;
+  removeFromCart: (batchId: number) => void;
+  updateQuantity: (batchId: number, qty: number) => void;
+  clearCart: () => void;
 }
 
-const CartContext = createContext<CartContextType | undefined>(undefined);
+export const useCart = create<CartState>((set) => ({
+  items: [],
+  searchQuery: '',
+  selectedMedicine: null,
+  paymentMethod: 'cash',
+  isCartVisible: false,
+  isCheckoutSuccess: false,
+  successBillData: null,
+  searchHistory: [],
+  subtotal: 0,
+  totalGst: 0,
+  grandTotal: 0,
 
-export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [items, setItems] = useState<CartItem[]>([]);
+  setSearchQuery: (query) => set((state) => {
+    if (state.searchQuery !== query) {
+      return { searchQuery: query, selectedMedicine: null };
+    }
+    return { searchQuery: query };
+  }),
+  setSelectedMedicine: (medicine) => set({ selectedMedicine: medicine }),
+  setPaymentMethod: (method) => set({ paymentMethod: method }),
+  setIsCartVisible: (visible) => set({ isCartVisible: visible }),
+  setIsCheckoutSuccess: (success) => set({ isCheckoutSuccess: success }),
+  setSuccessBillData: (data) => set({ successBillData: data }),
+  
+  appendToSearchHistory: (term) => set((state) => {
+    const cleanTerm = term.trim();
+    if (!cleanTerm) return {};
+    const filtered = state.searchHistory.filter((item) => item.toLowerCase() !== cleanTerm.toLowerCase());
+    return { searchHistory: [cleanTerm, ...filtered].slice(0, 5) };
+  }),
 
-  // Calculate distinct items line values according to Indian Medical standards
-  const computeItemTotals = (medicine: Medicine, batch: MedicineBatch, qty: number) => {
-    const mrp = Number(batch?.mrp || 0);
-    const gstRate = Number(medicine?.gst_percentage || 18);
+  addToCart: (medicine, batch, qty) => set((state) => {
+    const existingIndex = state.items.findIndex(i => i.batch.mb_id === batch.mb_id);
+    let newItems = [...state.items];
     
-    const totalLinePrice = mrp * qty;
-    // Base Price = MRP / (1 + (GST% / 100))
-    const basePriceTotal = totalLinePrice / (1 + gstRate / 100);
-    const gstCollected = totalLinePrice - basePriceTotal;
-
-    return {
-      itemSubtotal: basePriceTotal,
-      itemGst: gstCollected,
-      itemTotal: totalLinePrice
-    };
-  };
-
-  useEffect(() => {
-    const cached = storage.getString("cart_items");
-    if (cached) {
-      try {
-        setItems(JSON.parse(cached));
-      } catch (e) {
-        console.error("Failed to parse cached cart", e);
-      }
-    }
-  }, []);
-
-  const saveCart = (newItems: CartItem[]) => {
-    setItems(newItems);
-    storage.set("cart_items", JSON.stringify(newItems));
-  };
-
-  const addToCart = (medicine: Medicine, batch: MedicineBatch, quantity = 1) => {
-    const existingIndex = items.findIndex((item) => item.batch.mb_id === batch.mb_id);
-    const maxAvailable = batch?.quantity || 0;
-
     if (existingIndex > -1) {
-      const updated = [...items];
-      const newQty = updated[existingIndex].quantity + quantity;
-
-      if (newQty <= maxAvailable) {
-        const structuralTotals = computeItemTotals(medicine, batch, newQty);
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          quantity: newQty,
-          ...structuralTotals
-        };
-        saveCart(updated);
-      }
+      newItems[existingIndex].quantity += qty;
     } else {
-      if (quantity <= maxAvailable) {
-        const structuralTotals = computeItemTotals(medicine, batch, quantity);
-        saveCart([...items, { medicine, batch, quantity, ...structuralTotals }]);
-      }
+      const gstRate = medicine.gst_percentage || 18;
+      const basePrice = batch.mrp / (1 + gstRate / 100);
+      const itemGst = batch.mrp - basePrice;
+      newItems.push({ medicine, batch, quantity: qty, itemGst });
     }
-  };
+    return { items: newItems, ...calculateTotals(newItems) };
+  }),
 
-  const removeFromCart = (batchId: number) => {
-    saveCart(items.filter((item) => item.batch.mb_id !== batchId));
-  };
+  removeFromCart: (batchId) => set((state) => {
+    const newItems = state.items.filter(i => i.batch.mb_id !== batchId);
+    return { items: newItems, ...calculateTotals(newItems) };
+  }),
 
-  const updateQuantity = (batchId: number, quantity: number) => {
-    const index = items.findIndex((item) => item.batch.mb_id === batchId);
-    if (index > -1) {
-      const updated = [...items];
-      const maxAvailable = updated[index].batch?.quantity || 0;
-
-      if (quantity <= 0) {
-        removeFromCart(batchId);
-      } else if (quantity <= maxAvailable) {
-        const structuralTotals = computeItemTotals(updated[index].medicine, updated[index].batch, quantity);
-        updated[index] = {
-          ...updated[index],
-          quantity: quantity,
-          ...structuralTotals
-        };
-        saveCart(updated);
-      }
+  updateQuantity: (batchId, qty) => set((state) => {
+    if (qty <= 0) {
+      const newItems = state.items.filter(i => i.batch.mb_id !== batchId);
+      return { items: newItems, ...calculateTotals(newItems) };
     }
-  };
+    const newItems = state.items.map(item => 
+      item.batch.mb_id === batchId ? { ...item, quantity: qty } : item
+    );
+    return { items: newItems, ...calculateTotals(newItems) };
+  }),
 
-  const clearCart = () => saveCart([]);
+  clearCart: () => set({ items: [], subtotal: 0, totalGst: 0, grandTotal: 0 })
+}));
 
-  // Aggregate values cleanly across all line calculations (with 0 fallbacks)
-  const subtotal = items.reduce((sum, item) => sum + (item.itemSubtotal || 0), 0) || 0;
-  const totalGst = items.reduce((sum, item) => sum + (item.itemGst || 0), 0) || 0;
-  const grandTotal = items.reduce((sum, item) => sum + (item.itemTotal || 0), 0) || 0;
-
-  return (
-    <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQuantity, clearCart, subtotal, totalGst, grandTotal }}>
-      {children}
-    </CartContext.Provider>
-  );
-};
-
-export const useCart = () => {
-  const context = useContext(CartContext);
-  if (!context) throw new Error("useCart must be executed inside a CartProvider scope");
-  return context;
-};
+// Helper configuration utility to recalculate item totals 
+function calculateTotals(items: CartItem[]) {
+  let subtotal = 0;
+  let totalGst = 0;
+  items.forEach(item => {
+    const totalItemMrp = item.batch.mrp * item.quantity;
+    const gstRate = item.medicine.gst_percentage || 18;
+    const base = totalItemMrp / (1 + gstRate / 100);
+    subtotal += base;
+    totalGst += (totalItemMrp - base);
+  });
+  return { subtotal, totalGst, grandTotal: subtotal + totalGst };
+}
