@@ -1,56 +1,65 @@
-# Welcome to your Expo app 👋
+# Medigo Mobile 💊📱
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
-## Get started
 
-1. Install dependencies
+Medigo Mobile is a modern pharmacy management mobile application built using React Native, Expo, and TypeScript.  
+The application is designed to simplify pharmacy and medical store operations by providing a fast, secure, and user-friendly mobile experience for pharmacists, store managers, and healthcare businesses.
 
-   ```bash
-   npm install
-   ```
+The app focuses on performance, scalability, and real-time functionality with support for authentication, medicine management, notifications, and seamless backend integration. It is connected with a NestJS backend and uses modern mobile development practices to deliver a smooth cross-platform experience on both Android and iOS devices.
 
-2. Start the app
+## Features
 
-   ```bash
-   npx expo start
-   ```
+### 🔐 Secure Authentication
+- JWT-based authentication system
+- Protected routes and secure API communication
+- Persistent login using local storage
 
-In the output, you'll find options to open the app in a
+### 👨‍⚕️ Role-Based System
+- Different access levels for users
+- Supports pharmacy staff and management workflows
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 💊 Medicine Management
+- Manage medicine-related operations
+- Structured and scalable data handling
+- Easy integration with backend inventory systems
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### 🏥 Pharmacy Management
+- Built for pharmacy and medical store use cases
+- Organized architecture for scalable healthcare applications
 
-## Get a fresh project
+### 🔔 Push Notifications
+- Firebase Cloud Messaging (FCM) integration
+- Expo Notifications support
+- Real-time notification handling and navigation support
 
-When you're ready, run:
+### 📱 Cross-Platform Mobile App
+- Supports both Android and iOS
+- Built using React Native and Expo
 
-```bash
-npm run reset-project
-```
+### ⚡ Fast & Optimized Performance
+- Lightweight and responsive UI
+- Optimized state and storage handling
+- Smooth mobile experience
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 💾 Local Storage Support
+- Uses MMKV storage for fast local data persistence
+- Efficient session and token management
 
-### Other setup steps
+### 🌐 Backend Integration
+- Connected with NestJS backend APIs
+- Structured API services and scalable architecture
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### 🧭 Modern Navigation
+- Navigation powered by Expo Router
+- Clean and modular screen structure
 
-## Learn more
+### 📦 Production Ready
+- EAS Build support
+- Organized project structure
+- Scalable codebase for future expansion
 
-To learn more about developing your project with Expo, look at the following resources:
+---
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Demo & Screenshots
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+For application screenshots and demo images, check the `photos` folder available in this repository.
