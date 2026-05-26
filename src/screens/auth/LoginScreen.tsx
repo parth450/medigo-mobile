@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { loginApi, getProfileApi } from "../../api/auth.api";
 import { AuthStorage } from "../../store/auth.store";
 import type { User } from "../../types/auth.types";
+import { getFcmToken } from "../../utils/notificationService";
 
 interface Props {
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
@@ -39,9 +40,12 @@ export default function LoginScreen({ setUser }: Props) {
     try {
       setLoading(true);
 
+      const fcm_token = await getFcmToken();
+
       const loginData = await loginApi({
         email: cleanEmail,
         password: cleanPassword,
+        fcm_token: fcm_token || undefined,
       });
 
       AuthStorage.setToken(loginData.access_token);

@@ -3,6 +3,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AppNavigator from "./src/navigation/AppNavigator";
 
 
+import { requestUserPermission, notificationListener } from './src/utils/notificationService';
+import messaging from '@react-native-firebase/messaging';
+
+messaging().setBackgroundMessageHandler(async remoteMessage => {
+  console.log('Message handled in the background!', remoteMessage);
+});
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -18,6 +25,11 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
+  React.useEffect(() => {
+    requestUserPermission();
+    notificationListener();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AppNavigator />
